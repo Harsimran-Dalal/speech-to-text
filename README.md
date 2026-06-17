@@ -4,6 +4,9 @@
 understands when people mix Hindi and English.** Win **$500** — and walk away with a
 project genuinely worth putting on GitHub.
 
+**Start here:** [**Getting started**](GETTING_STARTED.md) — your first transcriber in a few steps ·
+[**How the reference bot works**](docs/REFERENCE_BOT.md) — the bar to beat, and the approach that gets there.
+
 ## The problem (and why it's worth building)
 
 If you build with AI, you talk to it all day — and typing is the slow part. Speech-to-text
