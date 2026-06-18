@@ -4,3 +4,4 @@ models/
 data/hidden/
 *.wav
 !data/dev/**/*.wav
+!samples/*.wav

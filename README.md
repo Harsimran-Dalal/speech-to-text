@@ -5,7 +5,9 @@ understands when people mix Hindi and English.** Win **$500** — and walk away 
 project genuinely worth putting on GitHub.
 
 **Start here:** [**Getting started**](GETTING_STARTED.md) — your first transcriber in a few steps ·
-[**How the reference bot works**](docs/REFERENCE_BOT.md) — the bar to beat, and the approach that gets there.
+[**Build skill**](SKILL.md) — the high-level architecture to follow (drop it into your AI) ·
+[**Sample clips**](samples/) — real English + Hindi+English clips to test on ·
+[**Reference bot**](docs/REFERENCE_BOT.md) — the bar to beat, and how it's built.
 
 ## The problem (and why it's worth building)
 
