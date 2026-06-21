@@ -93,7 +93,7 @@ streaming machinery (churn, TTFS usefulness, latency curves, caps).
 
 **The goal:** come close to Wispr Flow's *feel* — a good final within **~2 seconds** of you
 stopping. ~2s sits inside Wispr's real-world felt latency (1–2s) but is achievable locally and
-offline; today's best local engines (RambleFix included) sit around ~3.5s, so ~2s is a real,
+offline; today's best local engines sit around ~4.3s (RambleFix, measured), so ~2s is a real,
 meaningful cut, not a vanity bar. We do NOT claim Wispr's ~700ms cloud lab number — sub-1s is the
 stretch ceiling, not the bar.
 
@@ -101,7 +101,7 @@ End-to-final (25 pts):
 ```
 <= 1000ms        -> 25   (Wispr-class stretch ceiling)
 1000–2000ms      -> linear 25 → 20   (~2s = the realistic target: strong score)
-2000–3500ms      -> linear 20 → 10   (~3.5s ≈ today's best local — middling, beatable)
+2000–3500ms      -> linear 20 → 10   (RambleFix measured ~4.3s p50 lands just past here — beatable)
 3500–5000ms      -> linear 10 → 3
 > 5000ms         -> 0
 ```
@@ -138,7 +138,7 @@ the runs are undefined, the metric is 0 and the cap fires.
 |---|---:|
 | No partial before `end` (any run) | 70 |
 | No useful committed partial ever (TTFS undefined on ≥ half the runs) | 70 |
-| Median end-to-final > 4000ms (slower than today's best local) | 80 |
+| Median end-to-final > 4000ms (well past the 2s target) | 80 |
 | Median end-to-final > 6000ms | 50 |
 | Critical fact flip on the final | 50 |
 | Blank final / repetition loop / WER > 0.9 | 20 / 30 / 20 (reused from `scorecard.py`) |
@@ -199,22 +199,21 @@ code-switch-faithful Hinglish finalizer replaces the final when it lands. The
 clean wrapper that runs it through this exact public harness is
 [`baseline/ramblefix_stream.py`](../baseline/ramblefix_stream.py).
 
-**Published RambleFix streaming numbers** (real measured, on a local Mac / Apple Silicon,
-preliminary — first streaming approximation; the §3.1 curve knees were committed **before**
-these were computed):
+**Published RambleFix streaming numbers** — measured on the pinned frozen box (MacBook Pro
+14-inch 2021, Apple M1 Pro, 32 GB, macOS Tahoe 26.3.1), real-time WAV feeds, network off, over
+**25 real OpenSLR-104 Hindi+English clips** (2026-06-21). The §3.1 curve knees were committed
+**before** these were computed (pre-registration).
 
 | Axis | RambleFix (measured) | Notes |
 |---|---|---|
-| Release-to-paste (latest draft) | **~50ms** | paste happens immediately after key-up |
-| Release-to-final (async Hinglish finalizer) | **~3.3–3.5s** (p50), ~3.6s p95 | the finalizer, not on the paste path |
-| Time-to-first-partial | **~1.5–2.5s** | the next bottleneck — first useful draft is still too late |
-| Hindi-English mix (final) | WER ~**0.12**, meaning ~**0.84** | ~8× more faithful than cloud/free tools, which translate the mix away |
+| Release-to-paste (latest rough draft) | **p50 50ms · p95 1.2s** | a rough draft pastes ~instantly after key-up |
+| Release-to-final (faithful Hinglish final) | **p50 4.3s · p95 7.4s** | the async finalizer — **well above the 2s target**; the main thing to beat |
+| Time-to-first-partial | **p50 2.0s** | first *useful* draft is still too late |
+| Hindi-English mix (final) | WER **0.21** · meaning **0.76** · terms **0.97** | keeps the actual words; cloud/free tools translate the mix away |
 
-These were measured with the RambleFix streaming lab on real-time WAV feeds
-(release-to-paste ~50ms; release-to-final ~3.3–3.5s p50; first-partial ~1.5–2.5s).
-They are the **bar to beat**: push the **mix past meaning 0.90** while staying
-faithful, and get the **first useful partial under ~1s** and end-to-final fast —
-that's where the $500 is won.
+This is the **bar to beat — and it's beatable.** RambleFix's faithful final is ~4.3s p50, above
+the 2s target, and its first useful partial is ~2s. Get the final under ~2s and the first useful
+partial under ~1s while keeping the mix faithful (meaning past ~0.90) — that's where the $500 is won.
 
 > **Order constraint (pre-registration proof):** the §3.1 curve knees are finalized
 > and committed first; RambleFix's streaming numbers are computed and published
