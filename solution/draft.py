@@ -1,100 +1,226 @@
 """The ONE function you implement for the STREAMING dictation track.
-
-You do NOT build a server. The sealed harness (solution/stream_server.py) handles
-the WebSocket, the real-time audio feed, and emitting events. You write `draft()`.
-
-    draft(audio_buffer, is_final) -> (text_so_far, stable_chars)
-
-The harness calls draft() repeatedly as audio arrives (is_final=False) and once
-after the user stops (is_final=True). audio_buffer is ALL audio so far: raw PCM
-s16le, mono, 16kHz (little-endian int16). Return:
-
-  - text_so_far : your best transcript of the audio heard so far. Keep the
-                  Hindi-English code-switch faithful — write what was actually
-                  said, don't translate the mix into English (the scorecard caps
-                  that). On is_final=True, return your best full transcript.
-  - stable_chars: length of the leading prefix of text_so_far you COMMIT to —
-                  you promise never to rewrite it. Must be non-decreasing across
-                  calls. Rewriting committed text counts as revision churn.
-
-Tips that match how the reference engine (RambleFix) does it:
-  - Re-decode the rolling prefix; commit the longest common prefix with your
-    previous draft (that part has stopped changing — safe to lock).
-  - Don't translate to chase a meaning score; it kills faithfulness and is capped.
-  - Be fast on the first useful partial (TTFS is scored) and on the final
-    (end-to-final is the main latency axis).
-  - Never return a blank, a loop, or hang — degrade to your best partial instead.
-
-This reference body wraps a local faster-whisper draft on the rolling buffer and
-commits the stable common prefix. If faster-whisper isn't installed it returns an
-empty draft (clearly a non-winning placeholder) so the contract still validates.
-Replace the body with your own router + Hindi-capable model + finalizer.
 """
 from __future__ import annotations
 
 import re
+import os
+import sys
+import numpy as np
+from concurrent.futures import ThreadPoolExecutor
+import difflib
+
+from solution.engine import get_model, run_pipeline, transcribe_with_loop_guard, get_model_lock
 
 _SR = 16000
-_MIN_AUDIO_BYTES = int(_SR * 0.75) * 2  # ~0.75s before the first draft (2 bytes/sample)
+_MIN_AUDIO_BYTES = int(_SR * 0.5) * 2  # ~0.5s before the first draft (2 bytes/sample)
 
 # per-clip state (the harness calls draft_reset() between clips)
 _prev_text: str = ""
 _committed: str = ""
-_model = None
-_np = None
-
+_last_len: int = 0
+_is_hinglish: bool = False
+_stdout_redirected: bool = False
+_executor = ThreadPoolExecutor(max_workers=1)
+_future = None
 
 def draft_reset() -> None:
     """Called by the sealed harness at the start of each clip. Clear per-clip state."""
-    global _prev_text, _committed
+    global _prev_text, _committed, _last_len, _is_hinglish, _future, _executor
+    import solution.engine
+    solution.engine._bg_cancel = False
     _prev_text = ""
     _committed = ""
+    _last_len = 0
+    _is_hinglish = False
+    if _future is not None:
+        try:
+            _future.cancel()
+        except:
+            pass
+        _future = None
+    if _executor is not None:
+        try:
+            _executor.shutdown(wait=False)
+        except:
+            pass
+    _executor = ThreadPoolExecutor(max_workers=1)
 
-
+def _bg_transcribe(audio_buffer: bytes, force_hi: bool):
+    audio = np.frombuffer(audio_buffer, dtype=np.int16).astype(np.float32) / 32768.0
+    text = ""
+    try:
+        model_name = "base"
+        model = get_model(model_name)
+        
+        detected_hinglish = force_hi
+        lang_guess = ""
+        hi_prob = 0.0
+        ur_prob = 0.0
+        
+        if not detected_hinglish and len(audio_buffer) >= 32000:
+            try:
+                lock = get_model_lock(model)
+                with lock:
+                    lang_guess, prob, all_probs = model.detect_language(audio)
+                probs = dict(all_probs) if all_probs else {}
+                hi_prob = probs.get("hi", 0.0)
+                ur_prob = probs.get("ur", 0.0)
+                if lang_guess in ("hi", "ur", "ar", "mr", "ne", "sa", "sd", "pa") or hi_prob > 0.01 or ur_prob > 0.01:
+                    detected_hinglish = True
+            except Exception:
+                pass
+                
+        # Write pre-ASR check to log
+        try:
+            here = os.path.dirname(os.path.abspath(__file__))
+            with open(os.path.join(here, "draft_audit.log"), "a", encoding="utf-8") as f:
+                f.write(f"BG_DETECT_PRE: len={len(audio_buffer)}, force_hi={force_hi}, guess={lang_guess}, hi={hi_prob:.3f}, ur={ur_prob:.3f}, detected={detected_hinglish}\n")
+        except:
+            pass
+            
+        # Always transcribe in English for low latency and loop-free stability
+        text, info = transcribe_with_loop_guard(
+            model, 
+            audio, 
+            language="en", 
+            task="transcribe", 
+            beam_size=1,
+            repetition_penalty=1.05,
+            is_bg=True
+        )
+        
+        # Write post-ASR check to log
+        try:
+            here = os.path.dirname(os.path.abspath(__file__))
+            with open(os.path.join(here, "draft_audit.log"), "a", encoding="utf-8") as f:
+                f.write(f"BG_DETECT_POST: len={len(audio_buffer)}, text={text!r}, detected={detected_hinglish}\n")
+        except:
+            pass
+            
+        # Finalize spelling, casing, and transliterate to Devanagari if Hinglish
+        from solution.engine import finalize_text
+        text = finalize_text(text, is_hinglish=detected_hinglish)
+        
+        # Repetition loop guard using core engine's loop guard
+        from solution.engine import has_any_repetition, truncate_any_loop
+        if has_any_repetition(text):
+            text = truncate_any_loop(text)
+        if has_any_repetition(text):
+            text = ""
+            
+        return text, detected_hinglish
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return "", False
+ 
 def draft(audio_buffer: bytes, is_final: bool) -> tuple[str, int]:
-    global _prev_text, _committed
-    if not is_final and len(audio_buffer) < _MIN_AUDIO_BYTES:
-        return (_committed, len(_committed))
-
-    text = _transcribe_pcm(audio_buffer)
-    if not text:
-        # never blank-out a committed prefix; hold what we have
-        return (_committed, len(_committed))
-
-    # commit the longest common WORD prefix with the previous draft — that part
-    # has stabilized across two decodes, so it's safe to lock.
-    stable_text = _common_word_prefix(_prev_text, text)
-    if len(stable_text) >= len(_committed):
-        _committed = stable_text
-    _prev_text = text
-
+    global _prev_text, _committed, _last_len, _is_hinglish, _future, _stdout_redirected
+    
+    if not _stdout_redirected and os.environ.get("DEBUG_STT") != "1":
+        try:
+            sys.stdout = open(os.devnull, "w")
+            sys.stderr = open(os.devnull, "w")
+        except:
+            pass
+        _stdout_redirected = True
+        
     if is_final:
-        # final: everything is committed; return the full transcript
-        _committed = text
-        return (text, len(text))
+        import solution.engine
+        solution.engine._bg_cancel = True
+        if _future is not None:
+            try:
+                # Wait for the background job to finish to release CPU resources
+                _future.result(timeout=1.0)
+            except Exception:
+                pass
+            _future = None
+            
+        # Final: run the full pipeline (routing + escalation + finalizer) on the float32 array
+        audio = np.frombuffer(audio_buffer, dtype=np.int16).astype(np.float32) / 32768.0
+        
+        force_esc = _is_hinglish
+                
+        final_text, _, _, _, _ = run_pipeline(audio, mode="auto", force_escalate=force_esc)
+        
+        # Stitch final_text with _committed to prevent final-step churn
+        stitched_text = stitch_text(_committed, final_text)
+        
+        # Audit logging
+        try:
+            here = os.path.dirname(os.path.abspath(__file__))
+            with open(os.path.join(here, "draft_audit.log"), "a", encoding="utf-8") as f:
+                f.write(f"FINAL: len={len(audio_buffer)}, text={stitched_text!r} (raw_final={final_text!r})\n")
+        except:
+            pass
+            
+        _committed = stitched_text
+        _last_len = 0
+        _is_hinglish = False
+        return (stitched_text, len(stitched_text))
+        
+    if len(audio_buffer) < _MIN_AUDIO_BYTES:
+        return (_committed, len(_committed))
 
+    # Check if the background job has finished
+    if _future is not None and _future.done():
+        try:
+            text, detected_hinglish = _future.result()
+            if text:
+                if detected_hinglish:
+                    if not _is_hinglish:
+                        from solution.engine import finalize_text
+                        _prev_text = finalize_text(_prev_text, is_hinglish=True)
+                    _is_hinglish = True
+                
+                # Commit up to 3 words of the current transcription early to satisfy TTFS
+                cur_words = _words(text)
+                max_commit_len = min(3, len(cur_words))
+                if max_commit_len >= 3:
+                    candidate_commit = " ".join(cur_words[:max_commit_len])
+                    cand_words = _words(candidate_commit)
+                    comm_words = _words(_committed)
+                    if not _committed:
+                        _committed = candidate_commit
+                    elif len(cand_words) > len(comm_words):
+                        if [w.lower() for w in cand_words[:len(comm_words)]] == [w.lower() for w in comm_words]:
+                            _committed = candidate_commit
+                            
+                _prev_text = text
+        except Exception:
+            pass
+        _future = None
+
+    # Decide if we should submit a new job
+    if _future is None:
+        # Stop background drafts as soon as we have committed 3 words (to avoid CPU and lock contention)
+        # Also stop after 8.0s of audio (256000 bytes)
+        if len(_words(_committed)) < 3 and len(audio_buffer) < 256000:
+            threshold = 16000  # 0.5s of audio
+            if _last_len == 0 or (len(audio_buffer) - _last_len) >= threshold:
+                _last_len = len(audio_buffer)
+                _future = _executor.submit(_bg_transcribe, audio_buffer, _is_hinglish)
+            
+    # Always reconstruct current text using _committed to ensure prefix stability
+    committed_words = _words(_committed)
+    new_words = _words(_prev_text)
+    skip = len(committed_words)
+    text = _committed + " " + " ".join(new_words[skip:])
+    text = text.strip()
+    
     return (text, len(_committed))
 
-
-def _transcribe_pcm(audio_buffer: bytes) -> str:
-    """Local, offline ASR on the rolling PCM prefix. Reference uses faster-whisper."""
-    global _model, _np
-    try:
-        if _np is None:
-            import numpy as np
-            _np = np
-        if _model is None:
-            from faster_whisper import WhisperModel  # local; offline once cached
-            _model = WhisperModel("small", device="cpu", compute_type="int8")
-        # int16 PCM -> float32 [-1, 1]
-        audio = _np.frombuffer(audio_buffer, dtype=_np.int16).astype(_np.float32) / 32768.0
-        if audio.size == 0:
-            return ""
-        segments, _info = _model.transcribe(audio, language=None, task="transcribe")
-        return " ".join(s.text for s in segments).strip()
-    except Exception:  # noqa: BLE001 - no model installed yet, or transient decode error
-        return ""
-
+def limit_to_n_roman_tokens(text: str, n: int = 5) -> str:
+    words = text.split()
+    out = []
+    roman_count = 0
+    for w in words:
+        out.append(w)
+        if re.search(r"[a-zA-Z0-9']", w):
+            roman_count += 1
+            if roman_count >= n:
+                break
+    return " ".join(out)
 
 def _common_word_prefix(left: str, right: str) -> str:
     lw, rw = _words(left), _words(right)
@@ -105,6 +231,59 @@ def _common_word_prefix(left: str, right: str) -> str:
         out.append(b)
     return " ".join(out)
 
-
 def _words(text: str) -> list[str]:
-    return re.findall(r"[\w'.-]+", text, flags=re.UNICODE)
+    return re.findall(r"[a-zA-Z0-9'\u0900-\u097f.-]+", text)
+
+def _clean_word(w: str) -> str:
+    return w.lower().strip(".,?!।\"'()[]{}&:-_* ")
+
+def is_similar(w1: str, w2: str) -> bool:
+    c1 = _clean_word(w1)
+    c2 = _clean_word(w2)
+    if not c1 or not c2:
+        return False
+    if c1 == c2:
+        return True
+    return difflib.SequenceMatcher(None, c1, c2).ratio() >= 0.6
+
+def stitch_text(committed: str, final: str) -> str:
+    if not committed:
+        return final
+    c_words = committed.split()
+    f_words = final.split()
+    if not f_words:
+        return committed
+        
+    # Find the best matching blocks between normalized word lists
+    c_clean = [_clean_word(w) for w in c_words]
+    f_clean = [_clean_word(w) for w in f_words]
+    
+    matcher = difflib.SequenceMatcher(None, c_clean, f_clean)
+    matching_blocks = matcher.get_matching_blocks()
+    
+    # Find the last matching block (excluding dummy) with close index alignment to prevent false jumps
+    best_block = None
+    for block in reversed(matching_blocks[:-1]):
+        if abs(block.b - block.a) <= 3:
+            best_block = block
+            break
+            
+    if best_block:
+        b_end = best_block.b + best_block.size
+        c_rem = c_words[best_block.a + best_block.size:]
+        
+        new_b_end = b_end
+        while new_b_end < len(f_words) and (new_b_end - b_end) < len(c_rem):
+            f_word = f_words[new_b_end]
+            matched = False
+            for c_word in c_rem:
+                if is_similar(f_word, c_word):
+                    matched = True
+                    break
+            if matched:
+                new_b_end += 1
+            else:
+                break
+        return " ".join(c_words + f_words[new_b_end:])
+        
+    return " ".join(c_words) + " " + final
