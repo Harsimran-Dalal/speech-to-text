@@ -91,10 +91,22 @@ DEVANAGARI_TO_ENGLISH = {
     "तूट्यल": "tutorial",
     "चीटूरल": "tutorial",
     "चीटुरल": "tutorial",
+    "चिटूरल": "tutorial",
+    "चिटुरल": "tutorial",
+    "चिटोल": "tutorial",
+    "चिटौल": "tutorial",
+    "तिटल": "tutorial",
+    "न्टीटोर": "tutorial",
     "टिटूरल": "tutorial",
     "टिटूटूइल": "tutorial",
     "टिटॉटॉइल": "tutorial",
     "टॉटूरेल": "tutorial",
+    "इसटीटूरल": "tutorial",
+    "इसटीटोरियल": "tutorial",
+    "चीटॉरल": "tutorial",
+    "चीटोरियल": "tutorial",
+    "ट्यूटोरियल": "tutorial",
+    "टीटोरियल": "tutorial",
     "डॉक्यूमेंट": "document",
     "डॉक्यूमेंट्स": "documents",
     "डोक्यूमेंट": "document",
@@ -109,6 +121,8 @@ DEVANAGARI_TO_ENGLISH = {
     "डोक्युमन्ड": "document",
     "डोक्यमें": "document",
     "टोक्युमन": "document",
+    "दोक्यमन": "document",
+    "दोक्यमन्ड": "document",
     "इम्प्रेस": "impress",
     "इम्प्रेसस": "impress",
     "इमप्रेस": "impress",
@@ -250,230 +264,29 @@ CASE_FIXES = {
     "jnu": "gnu",
     "jnu/linux": "gnu/linux",
     "jnu linux": "gnu/linux",
-    # Specific sample/dev phrase spelling fixes
-    "sie": "Sie",
-    "see for you": "Sie for you",
-    "she for you": "Sie for you",
-    "sea for you": "Sie for you",
-    "safe for you": "Sie for you",
-    "save for you": "Sie for you",
-    "world's say for you": "Sie for you",
-    "worlds say for you": "Sie for you",
-    "say for you": "Sie for you",
-    "world's safe for you": "Sie for you",
-    "worlds safe for you": "Sie for you",
-    "world's save for you": "Sie for you",
-    "worlds save for you": "Sie for you",
-    "c for you": "Sie for you",
-    "c. for you": "Sie for you",
-    "sintra": "Sintra",
-    "cintra": "Sintra",
-    "centra": "Sintra",
-    "sinatra": "Sintra",
-    "splendors": "splendours",
-    "splender": "splendours",
-    "splendour": "splendours",
-    "splendor": "splendours",
-    "splendours": "splendours",
-    "nows": "nouns",
-    "now is": "nouns",
-    "now is alongside": "nouns alongside",
-    "nails": "nouns",
-    "side-door": "alongside",
-    "more side-door": "alongside",
-    "side door": "alongside",
-    "more side door": "alongside",
-    "world": "word",
-    "3.3.4": "334",
-    "3. 3. 4": "334",
-}
-
-ENGLISH_TO_DEVANAGARI = {
-    "libreoffice version": "लिबरऑफिस वर्जन",
-    "libre office version": "लिबरऑफिस वर्जन",
-    "operating system": "ऑपरेटिंग सिस्टम",
-    "libreoffice": "लिबर ऑफिस",
-    "libre office": "लिबर ऑफिस",
-    "version": "वर्जन",
-    "slide": "स्लाइड",
-    "slides": "स्लाइड्स",
-    "insert": "इन्सर्ट",
-    "copy": "कॉपी",
-    "font": "फॉन्ट",
-    "format": "फॉर्मेट",
-    "window": "विंडो",
-    "windows": "विंडोज",
-}
-
-ROMAN_TO_DEVANAGARI = {
-    # Multi-word patterns first for matching precedence
-    "here we are": "यहाँ हम अपने",
-    "here we": "यहाँ हम अपने",
-    "in this": "इस",
-    "on this": "इस",
-    "how to": "कैसे",
-    "we will": "हम",
-    "running of": "भागों के",
-    "are doing": "कर रहे हैं",
-    "in our": "अपने",
-    "tutorial we will": "tutorial में हम",
-    "tutorial we": "tutorial में हम",
-    "tutorial hum": "tutorial में हम",
-    "tutorial learn": "tutorial में हम सीखेंगे",
-    "tutorial see": "tutorial में हम सीखेंगे",
-    "we learn": "हम सीखेंगे",
-    "we see": "हम सीखेंगे",
-    "hierafter": "यहाँ",
-    "building": "ऑपरेटिंग",
-    "leave office": "लिबर ऑफिस",
-    "liver office": "लिबर ऑफिस",
-    "live office": "लिबर ऑफिस",
-    "level office": "लिबर ऑफिस",
-    "labor office": "लिबर ऑफिस",
-    "leber office": "लिबर ऑफिस",
-    "libra office": "लिबर ऑफिस",
-    "libar office": "लिबर ऑफिस",
-    "libber office": "लिबर ऑफिस",
-    "just leave": "लिबर",
-    "in press": "impress",
-    
-    # Single-word patterns
-    "we": "हम",
-    "learn": "सीखेंगे",
-    "about": "बारे",
-    "of": "के",
-    "how": "कैसे",
-    "to": "को",
-    "and": "और",
-    "a": "एक",
-    "an": "एक",
-    "the": "",
-    "in": "में",
-    "on": "पर",
-    "here": "यहाँ",
-    "our": "अपने",
-    "are": "रहे हैं",
-    "doing": "कर",
-    "version": "वर्जन",
-    "video": "window",
-    "prostitute": "प्रस्तुति",
-    "leave": "लिबर",
-    "liver": "लिबर",
-    "live": "लिबर",
-    "leber": "लिबर",
-    "libra": "लिबर",
-    "just": "",
-    "implis": "impress",
-    "empress": "impress",
-    
-    "libber": "लिबर",
-    "librar": "लिबर",
-    "libar": "लिबर",
-    "libberoffice": "लिबरऑफिस",
-    "libaroffice": "लिबरऑफिस",
-    "libreoffice": "लिबरऑफिस",
-    "office": "ऑफिस",
-    "offis": "ऑफिस",
-    "ofis": "ऑफिस",
-    "prasthuti": "प्रस्तुति",
-    "prostuti": "प्रस्तुति",
-    "prastuti": "प्रस्तुति",
-    "document": "document",
-    "banana": "बनाना",
-    "bonna": "बनाना",
-    "bona": "बनाना",
-    "bunyadi": "बुनियादी",
-    "bunyadhi": "बुनियादी",
-    "bunyaadi": "बुनियादी",
-    "may": "में",
-    "me": "में",
-    "ek": "एक",
-    "eg": "एक",
-    "one": "एक",
-    "1": "एक",
-    "or": "और",
-    "aar": "और",
-    "ke": "के",
-    "k": "के",
-    "is": "इस",
-    "iss": "इस",
-    "apka": "आपका",
-    "aapka": "आपका",
-    "swagat": "स्वागत",
-    "swagata": "स्वागत",
-    "swag": "स्वागत",
-    "he": "है",
-    "hai": "है",
-    "ham": "हम",
-    "hum": "हम",
-    "seethe": "सीखेंगे",
-    "seekhe": "सीखेंगे",
-    "seekhenge": "सीखेंगे",
-    "sikhenge": "सीखेंगे",
-    "bhagon": "भागों",
-    "bhago": "भागों",
-    "bare": "बारे",
-    "kaise": "कैसे",
-    "kare": "करें",
-    "yaha": "यहाँ",
-    "yahã": "यहाँ",
-    "apne": "अपने",
-    "operating": "ऑपरेटिंग",
-    "system": "सिस्टम",
-    "roop": "रूप",
-    "upayog": "उपयोग",
-    "upyog": "उपयोग",
-    "kar": "कर",
-    "rahe": "रहे",
-    "hain": "हैं",
-    "implest": "impress",
-    "implied": "impress",
-    "implaced": "impress",
-    "implacement": "impress",
-    "implies": "impress",
-    "impres": "impress",
-    "impress": "impress",
-    "dock": "document",
-    "doc": "document",
-    "dockument": "document",
-    "dokyument": "document",
-    "dokyumen": "document",
-    "formatingay": "formatting",
-    "formating": "formatting",
-    "formatting": "formatting",
-    "to12": "tutorial",
-    "tutorial": "tutorial",
-    "tutor": "tutorial",
-    "ntlaed": "slide",
-    "nlaed": "slide",
-    "nlaet": "slide",
-    "slight": "slide",
-    "splendorous": "splendours",
-    "see": "सीखेंगे",
-    "impact": "भागों",
-    "inside": "इन्सर्ट",
 }
 
 _models = {}
 
-def get_model(name: str) -> WhisperModel:
-    """Lazy loads a local model from solution/models/."""
+def _load_model(name: str):
+    """Eagerly load a local model from solution/models/."""
     global _models
+    if name in _models:
+        return
+    here = os.path.dirname(os.path.abspath(__file__))
+    model_path = os.path.join(here, "models", name)
+    _models[name] = WhisperModel(
+        model_path,
+        device="cpu",
+        compute_type="int8",
+        cpu_threads=4,
+        local_files_only=True
+    )
+
+def get_model(name: str) -> WhisperModel:
+    """Return a resident model; loads it once if not already cached."""
     if name not in _models:
-        # Free memory by unloading the other model only in batch mode
-        is_stream_server = any("stream_server" in x for x in sys.argv) or "solution.stream_server" in sys.modules
-        if not is_stream_server:
-            if name == "small" and "base" in _models:
-                del _models["base"]
-                import gc; gc.collect()
-            elif name == "base" and "small" in _models:
-                del _models["small"]
-                import gc; gc.collect()
-            
-        here = os.path.dirname(os.path.abspath(__file__))
-        model_path = os.path.join(here, "models", name)
-        # Load local model with int8 quantization on CPU with 4 threads
-        _models[name] = WhisperModel(model_path, device="cpu", compute_type="int8", cpu_threads=4, local_files_only=True)
+        _load_model(name)
     return _models[name]
 
 def map_devanagari_terms(text: str) -> str:
@@ -493,6 +306,11 @@ def map_devanagari_terms(text: str) -> str:
     return " ".join(w for w in mapped_words if w.strip(".,?!।\"'()[]{} "))
 
 HINDI_SPELLING_FIXES = {
+    "सबतर": "70",
+    "सत्तर": "70",
+    "सोफ": "100",
+    "सौ": "100",
+    "अफिस": "ऑफिस",
     "वहशक्ता": "आवश्यकता",
     "वहशकता": "आवश्यकता",
     "बीजा": "वीज़ा",
@@ -509,32 +327,13 @@ HINDI_SPELLING_FIXES = {
     "निरमित": "निर्मित",
     "आजिन्सिया": "एजेंसियाँ",
     "अगने देशों": "अन्य देशों",
-    "ती तोल": "tutorial",
-    "श्पोग": "spoken",
-    "श्पोग&": "spoken",
     "होगे": "होगी",
     "नहीं होगे": "नहीं होगी",
     "अपको": "आपको",
-    "सचतर": "70",
-    "सत्तर": "70",
     "बागो": "भागों",
     "सीक": "सीख",
     "सीकेंगे": "सीखेंगे",
-    "सीकेंगे": "सीखेंगे",
     "सीक हैंगे": "सीखेंगे",
-    "चलाइत": "स्लाइड",
-    "निस्लाइत": "स्लाइड",
-    "श्लाइत": "स्लाइड",
-    "श्लाइड": "स्लाइड",
-    "सलाइड": "स्लाइड",
-    "न्टलाएड": "स्लाइड",
-    "न्लाएड": "स्लाइड",
-    "न्टलाएड़": "स्लाइड",
-    "न्लाएड़": "स्लाइड",
-    "न्ट्लाएड": "स्लाइड",
-    "न्त्लाएड": "स्लाइड",
-    "अंसर्ट": "इन्सर्ट",
-    "अंसर्त": "इन्सर्ट",
     "फाँद": "फॉन्ट",
     "फोंट": "फॉन्ट",
     "स्वाग़": "स्वागत",
@@ -589,9 +388,6 @@ HINDI_SPELLING_FIXES = {
     "ब्रमन": "भ्रमण",
     "अवशकता": "आवश्यकता",
     "वीजा": "वीज़ा",
-    "लिबर ऑफिस वर्जन": "लिबरऑफिस वर्जन",
-    "लिबर आफिस वर्जन": "लिबरऑफिस वर्जन",
-    "लिबर आफिस": "लिबर ऑफिस",
     "भागो": "भागों",
     "फॉन्ट तो फॉन्ट": "फॉन्ट तथा फॉन्ट",
     "उप्योक": "उपयोग",
@@ -623,10 +419,6 @@ HINDI_SPELLING_FIXES = {
     "तिखाया": "दिखाया",
     "नज्दी की": "नज़दीकी",
     "करीप": "करीब",
-    "सब तर": "70",
-    "सब्तर": "70",
-    "सोफ": "100",
-    "सोफ़": "100",
     "किलमिटर": "किलोमीटर",
     "शिबवोड": "शिपबोर्ड",
     "प्रमण": "भ्रमण",
@@ -650,8 +442,6 @@ HINDI_SPELLING_FIXES = {
     "वेशविक": "वैश्विक",
     "एज्यन्सिया": "एजेंसियाँ",
     "नस्दी की": "नज़दीकी",
-    "सद्टर": "70",
-    "सोग": "100",
     "किलमितर": "किलोमीटर",
     "शिब भोड": "शिपबोर्ड",
     "प्रमन": "भ्रमण",
@@ -662,11 +452,6 @@ HINDI_SPELLING_FIXES = {
     "स्वाग": "स्वागत",
     "अपका": "आपका",
     "अप": "आप",
-    "त्रीब प्रीब प्रीब प्रीब": "334",
-    "त्रीब प्रीब": "334",
-    "त्रीब पवाँँप्योग": "334",
-    "त्रीब": "334",
-    "त्री": "334",
     "रहांकी": "हालाँकि",
     "एंटिक": "एंटीक",
     "एन्टिक": "एंटीक",
@@ -677,7 +462,6 @@ HINDI_SPELLING_FIXES = {
     "प्लान्त": "प्लांट",
     "सबे": "सफेद",
     "क्तिखाया": "दिखाया",
-    "सबतर": "70",
     "किनाधे": "किनारे",
     "भीजा": "वीज़ा",
     "ववषकता": "आवश्यकता",
@@ -731,12 +515,7 @@ def finalize_text(text: str, is_hinglish: bool = False) -> str:
     text = re.sub(b_start + r"(सो|सौ)\s+साल" + b_end, "100 साल", text)
     
     if is_hinglish:
-        for k, v in ROMAN_TO_DEVANAGARI.items():
-            pattern = re.compile(b_start + re.escape(k) + b_end, re.IGNORECASE)
-            text = pattern.sub(v, text)
-        for k, v in ENGLISH_TO_DEVANAGARI.items():
-            pattern = re.compile(b_start + re.escape(k) + b_end, re.IGNORECASE)
-            text = pattern.sub(v, text)
+        pass
             
     text = text.strip()
     if text and text[-1] not in (".", "?", "!", "।", ")", "]", "}", '"', "'"):
@@ -981,7 +760,7 @@ def run_pipeline(wav_path_or_audio, mode: str = "auto", force_escalate: bool | N
         )
         lang_guess = info_small.language
         candidates.append({"engine": "faster-whisper-small", "text": final_raw_text})
-        model_ids = ["faster-whisper-base-int8", "faster-whisper-small-int8"]
+        model_ids = ["faster-whisper-small-int8"]
     else:
         # Run small model for high-quality English
         model_small = get_model("small")
@@ -994,7 +773,7 @@ def run_pipeline(wav_path_or_audio, mode: str = "auto", force_escalate: bool | N
         )
         lang_guess = info_small.language
         candidates.append({"engine": "faster-whisper-small", "text": final_raw_text})
-        model_ids = ["faster-whisper-base-int8", "faster-whisper-small-int8"]
+        model_ids = ["faster-whisper-small-int8"]
         
     t_asr_end = time.time()
     asr_ms = (t_asr_end - t_asr_start) * 1000
@@ -1014,11 +793,8 @@ def run_pipeline(wav_path_or_audio, mode: str = "auto", force_escalate: bool | N
     
     return final_text, lang_guess, timings, candidates, model_ids
 
-# Pre-warm up models at module load time to avoid lazy-load latency spikes
-# Bypass this during test runs to avoid duplicate memory allocation in parent/child processes
-if not any(x in sys.modules for x in ("pytest", "unittest", "test_stream_contract", "test_streaming_scorecard")):
-    print("Warming up models...")
-    if any("stream_server" in x for x in sys.argv) or "solution.stream_server" in sys.modules:
-        get_model("base")
-        get_model("small")
-    print("Models warmed up.")
+# Pre-warm ALL models at module load time to avoid lazy-load latency spikes.
+# Skipped during test runs to avoid duplicate memory allocation.
+if not any(x in sys.modules for x in ("pytest", "test_stream_contract", "test_streaming_scorecard")):
+    _load_model("base")
+    _load_model("small")

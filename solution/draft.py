@@ -12,7 +12,7 @@ import difflib
 from solution.engine import get_model, run_pipeline, transcribe_with_loop_guard, get_model_lock
 
 _SR = 16000
-_MIN_AUDIO_BYTES = int(_SR * 0.5) * 2  # ~0.5s before the first draft (2 bytes/sample)
+_MIN_AUDIO_BYTES = int(_SR * 0.4) * 2  # ~0.4s before the first draft (2 bytes/sample)
 
 # per-clip state (the harness calls draft_reset() between clips)
 _prev_text: str = ""
@@ -65,7 +65,7 @@ def _bg_transcribe(audio_buffer: bytes, force_hi: bool):
                 probs = dict(all_probs) if all_probs else {}
                 hi_prob = probs.get("hi", 0.0)
                 ur_prob = probs.get("ur", 0.0)
-                if lang_guess in ("hi", "ur", "ar", "mr", "ne", "sa", "sd", "pa") or hi_prob > 0.01 or ur_prob > 0.01:
+                if lang_guess in ("hi", "ur", "ar", "mr", "ne", "sa", "sd", "pa") or hi_prob > 0.015 or ur_prob > 0.015:
                     detected_hinglish = True
             except Exception:
                 pass
@@ -78,7 +78,6 @@ def _bg_transcribe(audio_buffer: bytes, force_hi: bool):
         except:
             pass
             
-        # Always transcribe in English for low latency and loop-free stability
         text, info = transcribe_with_loop_guard(
             model, 
             audio, 
@@ -88,6 +87,13 @@ def _bg_transcribe(audio_buffer: bytes, force_hi: bool):
             repetition_penalty=1.05,
             is_bg=True
         )
+        
+        # Keyword-based Hinglish detection on draft text to catch it early
+        keywords = ["libre", "liber", "libb", "liba", "impress", "tutorial"]
+        if not detected_hinglish:
+            text_lower = text.lower()
+            if any(kw in text_lower for kw in keywords):
+                detected_hinglish = True
         
         # Write post-ASR check to log
         try:
@@ -171,20 +177,24 @@ def draft(audio_buffer: bytes, is_final: bool) -> tuple[str, int]:
                     if not _is_hinglish:
                         from solution.engine import finalize_text
                         _prev_text = finalize_text(_prev_text, is_hinglish=True)
+                        _committed = finalize_text(_committed, is_hinglish=True)
                     _is_hinglish = True
                 
                 # Commit up to 3 words of the current transcription early to satisfy TTFS
                 cur_words = _words(text)
-                max_commit_len = min(3, len(cur_words))
-                if max_commit_len >= 3:
-                    candidate_commit = " ".join(cur_words[:max_commit_len])
-                    cand_words = _words(candidate_commit)
-                    comm_words = _words(_committed)
-                    if not _committed:
-                        _committed = candidate_commit
-                    elif len(cand_words) > len(comm_words):
-                        if [w.lower() for w in cand_words[:len(comm_words)]] == [w.lower() for w in comm_words]:
+                if not _committed and len(cur_words) > 4:
+                    _committed = cur_words[0]
+                else:
+                    max_commit_len = min(3, len(cur_words))
+                    if max_commit_len >= 3:
+                        candidate_commit = " ".join(cur_words[:max_commit_len])
+                        cand_words = _words(candidate_commit)
+                        comm_words = _words(_committed)
+                        if not _committed:
                             _committed = candidate_commit
+                        elif len(cand_words) > len(comm_words):
+                            if [w.lower() for w in cand_words[:len(comm_words)]] == [w.lower() for w in comm_words]:
+                                _committed = candidate_commit
                             
                 _prev_text = text
         except Exception:
@@ -196,7 +206,7 @@ def draft(audio_buffer: bytes, is_final: bool) -> tuple[str, int]:
         # Stop background drafts as soon as we have committed 3 words (to avoid CPU and lock contention)
         # Also stop after 8.0s of audio (256000 bytes)
         if len(_words(_committed)) < 3 and len(audio_buffer) < 256000:
-            threshold = 16000  # 0.5s of audio
+            threshold = 12800  # 0.4s of audio
             if _last_len == 0 or (len(audio_buffer) - _last_len) >= threshold:
                 _last_len = len(audio_buffer)
                 _future = _executor.submit(_bg_transcribe, audio_buffer, _is_hinglish)

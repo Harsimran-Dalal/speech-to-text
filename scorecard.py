@@ -20,7 +20,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-_WORD = re.compile(r"[a-z0-9']+")
+_WORD = re.compile(r"[a-z0-9'\u0900-\u097f]+")
 _NEG = {"no", "not", "n't", "never", "without", "dont", "don't", "cannot", "can't", "nahi", "mat"}
 
 # Shared latency bar (ms): batch counts a clip as a hang past this; the streaming

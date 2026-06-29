@@ -7,41 +7,41 @@ The CLI signature and the result.json shape are REQUIRED and checked by the harn
 
 Rules: runs fully local; no outbound network during the scored run (loopback to a
 local ASR server is fine); emit the JSON below; no hardcoded phrase fixes.
-
-This skeleton emits a valid contract result. If `faster-whisper` is installed it
-runs a real local baseline; otherwise it returns an empty transcript clearly
-flagged so the contract still validates (and scores as a blank — replace it!).
 """
 from __future__ import annotations
-import argparse, json, time
+import argparse
+import json
+import time
 
+from solution.engine import run_pipeline
 
 def transcribe(wav_path: str, mode: str = "auto") -> dict:
     t0 = time.time()
-    text, model_ids, candidates = "", [], []
-    asr_ms = 0.0
     try:
-        from faster_whisper import WhisperModel  # local, offline once weights are cached
-        a = time.time()
-        model = WhisperModel("small", device="cpu", compute_type="int8")
-        segments, info = model.transcribe(wav_path, language=None, task="transcribe")
-        text = " ".join(s.text for s in segments).strip()
-        asr_ms = (time.time() - a) * 1000
-        model_ids = ["faster-whisper-small-int8"]
-        candidates = [{"engine": "faster-whisper-small", "text": text}]
-    except Exception as e:  # noqa: BLE001 — skeleton: no model installed yet
-        candidates = [{"engine": "none", "text": "", "note": f"plug your engine here ({type(e).__name__})"}]
-
-    total_ms = (time.time() - t0) * 1000
-    return {
-        "text": text,
-        "mode_used": mode,
-        "language_guess": "unknown",
-        "timings_ms": {"total": round(total_ms), "asr": round(asr_ms), "postprocess": 0},
-        "raw_candidates": candidates,
-        "model_ids": model_ids,
-        "local_only": True,
-    }
+        final_text, lang_guess, timings, candidates, model_ids = run_pipeline(wav_path, mode=mode)
+        total_ms = (time.time() - t0) * 1000
+        timings["total"] = round(total_ms)
+        return {
+            "text": final_text,
+            "mode_used": mode,
+            "language_guess": lang_guess,
+            "timings_ms": timings,
+            "raw_candidates": candidates,
+            "model_ids": model_ids,
+            "local_only": True,
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "text": "",
+            "mode_used": mode,
+            "language_guess": "unknown",
+            "timings_ms": {"total": round((time.time() - t0) * 1000), "asr": 0, "postprocess": 0},
+            "raw_candidates": [{"engine": "none", "text": "", "note": str(e)}],
+            "model_ids": [],
+            "local_only": True,
+        }
 
 
 def main():
