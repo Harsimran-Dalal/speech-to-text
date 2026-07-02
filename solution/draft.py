@@ -49,15 +49,14 @@ def _bg_transcribe(audio_buffer: bytes, force_hi: bool):
     audio = np.frombuffer(audio_buffer, dtype=np.int16).astype(np.float32) / 32768.0
     text = ""
     try:
-        model_name = "base"
-        model = get_model(model_name)
-        
         detected_hinglish = force_hi
         lang_guess = ""
         hi_prob = 0.0
         ur_prob = 0.0
+        prob = 0.0
         
-        if not detected_hinglish and len(audio_buffer) >= 32000:
+        model = get_model("small")
+        if not detected_hinglish:
             try:
                 lock = get_model_lock(model)
                 with lock:
@@ -65,7 +64,7 @@ def _bg_transcribe(audio_buffer: bytes, force_hi: bool):
                 probs = dict(all_probs) if all_probs else {}
                 hi_prob = probs.get("hi", 0.0)
                 ur_prob = probs.get("ur", 0.0)
-                if lang_guess in ("hi", "ur", "ar", "mr", "ne", "sa", "sd", "pa") or hi_prob > 0.015 or ur_prob > 0.015:
+                if (lang_guess in ("hi", "ur", "mr", "ne", "sa") and prob > 0.15) or hi_prob > 0.15 or ur_prob > 0.15:
                     detected_hinglish = True
             except Exception:
                 pass
@@ -81,19 +80,12 @@ def _bg_transcribe(audio_buffer: bytes, force_hi: bool):
         text, info = transcribe_with_loop_guard(
             model, 
             audio, 
-            language="en", 
+            language="hi" if detected_hinglish else "en", 
             task="transcribe", 
             beam_size=1,
             repetition_penalty=1.05,
             is_bg=True
         )
-        
-        # Keyword-based Hinglish detection on draft text to catch it early
-        keywords = ["libre", "liber", "libb", "liba", "impress", "tutorial"]
-        if not detected_hinglish:
-            text_lower = text.lower()
-            if any(kw in text_lower for kw in keywords):
-                detected_hinglish = True
         
         # Write post-ASR check to log
         try:
@@ -136,8 +128,10 @@ def draft(audio_buffer: bytes, is_final: bool) -> tuple[str, int]:
         solution.engine._bg_cancel = True
         if _future is not None:
             try:
-                # Wait for the background job to finish to release CPU resources
-                _future.result(timeout=1.0)
+                # Wait for the background job to finish to retrieve its language detection result
+                text, detected_hinglish = _future.result(timeout=1.5)
+                if detected_hinglish:
+                    _is_hinglish = True
             except Exception:
                 pass
             _future = None
@@ -145,7 +139,7 @@ def draft(audio_buffer: bytes, is_final: bool) -> tuple[str, int]:
         # Final: run the full pipeline (routing + escalation + finalizer) on the float32 array
         audio = np.frombuffer(audio_buffer, dtype=np.int16).astype(np.float32) / 32768.0
         
-        force_esc = _is_hinglish
+        force_esc = True if _is_hinglish else None
                 
         final_text, _, _, _, _ = run_pipeline(audio, mode="auto", force_escalate=force_esc)
         
@@ -180,21 +174,19 @@ def draft(audio_buffer: bytes, is_final: bool) -> tuple[str, int]:
                         _committed = finalize_text(_committed, is_hinglish=True)
                     _is_hinglish = True
                 
-                # Commit up to 3 words of the current transcription early to satisfy TTFS
-                cur_words = _words(text)
-                if not _committed and len(cur_words) > 4:
-                    _committed = cur_words[0]
+                stable = _common_word_prefix(_prev_text, text)
+                stable_words = _words(stable)
+                committed_words = _words(_committed)
+                
+                if not _committed:
+                    # Require at least 2 stable words before the first commit
+                    if len(stable_words) >= 2:
+                        _committed = " ".join(stable_words[:2])
                 else:
-                    max_commit_len = min(3, len(cur_words))
-                    if max_commit_len >= 3:
-                        candidate_commit = " ".join(cur_words[:max_commit_len])
-                        cand_words = _words(candidate_commit)
-                        comm_words = _words(_committed)
-                        if not _committed:
-                            _committed = candidate_commit
-                        elif len(cand_words) > len(comm_words):
-                            if [w.lower() for w in cand_words[:len(comm_words)]] == [w.lower() for w in comm_words]:
-                                _committed = candidate_commit
+                    # Extend _committed if the new stable prefix extends it
+                    if len(stable_words) > len(committed_words):
+                        if [w.lower() for w in stable_words[:len(committed_words)]] == [w.lower() for w in committed_words]:
+                            _committed = stable
                             
                 _prev_text = text
         except Exception:
@@ -203,9 +195,8 @@ def draft(audio_buffer: bytes, is_final: bool) -> tuple[str, int]:
 
     # Decide if we should submit a new job
     if _future is None:
-        # Stop background drafts as soon as we have committed 3 words (to avoid CPU and lock contention)
-        # Also stop after 8.0s of audio (256000 bytes)
-        if len(_words(_committed)) < 3 and len(audio_buffer) < 256000:
+        # Run background drafts continuously up to 8s of audio
+        if len(audio_buffer) < 256000:
             threshold = 12800  # 0.4s of audio
             if _last_len == 0 or (len(audio_buffer) - _last_len) >= threshold:
                 _last_len = len(audio_buffer)

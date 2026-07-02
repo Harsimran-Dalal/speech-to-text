@@ -273,8 +273,12 @@ def _load_model(name: str):
     global _models
     if name in _models:
         return
+    t_start = time.time()
     here = os.path.dirname(os.path.abspath(__file__))
     model_path = os.path.join(here, "models", name)
+    if os.environ.get("DEBUG_STT") == "1":
+        sys.stderr.write(f"model: loading {name} from {model_path}...\n")
+        sys.stderr.flush()
     _models[name] = WhisperModel(
         model_path,
         device="cpu",
@@ -282,6 +286,10 @@ def _load_model(name: str):
         cpu_threads=4,
         local_files_only=True
     )
+    t_end = time.time()
+    if os.environ.get("DEBUG_STT") == "1":
+        sys.stderr.write(f"model: finished loading {name} in {(t_end - t_start)*1000:.2f}ms\n")
+        sys.stderr.flush()
 
 def get_model(name: str) -> WhisperModel:
     """Return a resident model; loads it once if not already cached."""
@@ -408,7 +416,6 @@ HINDI_SPELLING_FIXES = {
     "वेश्विक": "वैश्विक",
     "परीबाशा": "परिभाषा",
     "चिसके": "जिसके",
-    "saman": "सामान",
     "समान": "सामान",
     "एज्झन्सिया": "एजेंसियाँ",
     "के तौर परिभाषित": "के तौर पर परिभाषित",
@@ -435,7 +442,6 @@ HINDI_SPELLING_FIXES = {
     "सब एद": "सफेद",
     "तिकाया": "दिखाया",
     "प्लाँट": "प्लांट",
-    "plant": "प्लांट",
     "अगनेदेशो": "अन्य देशों",
     "दीजाती": "दी जाती",
     "अजी": "ऐसी",
@@ -609,6 +615,10 @@ _bg_cancel = False
 def transcribe_with_loop_guard(model: WhisperModel, audio, language=None, task="transcribe", beam_size=5, repetition_penalty=1.12, is_bg=False):
     """Wrapper around transcribe that handles repetition loop detection and fallbacks."""
     global _bg_cancel
+    prompt = None
+    if language == "hi":
+        prompt = "लिबर ऑफिस, स्पोकन ट्यूटोरियल, हिंदी, इंप्रेस, डॉक्यूमेंट, फॉर्मेटिंग"
+        
     lock = get_model_lock(model)
     
     if is_bg:
@@ -632,7 +642,8 @@ def transcribe_with_loop_guard(model: WhisperModel, audio, language=None, task="
             condition_on_previous_text=False,
             repetition_penalty=repetition_penalty,
             vad_filter=True,
-            vad_parameters=dict(min_silence_duration_ms=400)
+            vad_parameters=dict(min_silence_duration_ms=400),
+            initial_prompt=prompt
         )
         text = " ".join(s.text for s in segments).strip()
     finally:
@@ -674,7 +685,8 @@ def transcribe_with_loop_guard(model: WhisperModel, audio, language=None, task="
                 temperature=0.0,
                 repetition_penalty=penalty,
                 vad_filter=True,
-                vad_parameters=dict(min_silence_duration_ms=400)
+                vad_parameters=dict(min_silence_duration_ms=400),
+                initial_prompt=prompt
             )
             text2 = " ".join(s.text for s in segments).strip()
         finally:
@@ -712,77 +724,87 @@ def run_pipeline(wav_path_or_audio, mode: str = "auto", force_escalate: bool | N
     else:
         audio = wav_path_or_audio
         
-    # 1. Routing pass (using small model's detect_language directly to save memory and avoid base loading)
-    if force_escalate is None:
-        model_small = get_model("small")
-        lock = get_model_lock(model_small)
-        with lock:
-            lang_guess, prob, all_probs = model_small.detect_language(audio)
-        
-        hi_prob = 0.0
-        ur_prob = 0.0
-        if all_probs:
-            probs = dict(all_probs) if not isinstance(all_probs, dict) else all_probs
-            hi_prob = probs.get("hi", 0.0)
-            ur_prob = probs.get("ur", 0.0)
-            
-        escalate = False
-        if mode == "auto":
-            if lang_guess in ("hi", "ur", "ar", "mr", "ne", "sa", "sd", "pa") or hi_prob > 0.03 or ur_prob > 0.03:
-                escalate = True
-        elif mode in ("hinglish", "verbatim"):
-            escalate = True
-    else:
+    t_pre = time.time()
+    sys.stderr.write(f"timing: entry to preprocess took {(t_pre - t0)*1000:.2f}ms\n")
+    sys.stderr.flush()
+
+    # 1. Determine target language and beam size based on mode and settings
+    if force_escalate is not None:
         escalate = force_escalate
-        lang_guess = "hi" if escalate else "en"
-    initial_text = ""
-        
-    # 2. Run the final transcription model
+        target_lang = "hi" if escalate else "en"
+    elif mode == "hinglish":
+        escalate = True
+        target_lang = "hi"
+    elif mode == "fast":
+        escalate = False
+        target_lang = "en"
+    elif mode == "verbatim":
+        escalate = True
+        target_lang = None
+    else:  # auto
+        escalate = None
+        target_lang = None
+
+    model_small = get_model("small")
+    if target_lang is None:
+        try:
+            lock = get_model_lock(model_small)
+            with lock:
+                lang_guess, prob, all_probs = model_small.detect_language(audio)
+            if lang_guess in ("hi", "ur", "ar", "mr", "ne", "sa", "sd", "pa"):
+                target_lang = "hi"
+                escalate = True
+            else:
+                target_lang = "en"
+                escalate = False
+        except Exception:
+            target_lang = "en"
+            escalate = False
+
+    # Use beam_size=1 for fast/english mode, beam_size=2 for others
+    final_beam_size = 1 if (escalate is False or mode == "fast") else 2
+    
+    # 2. Run the final transcription model in a single pass (detects language and transcribes)
     candidates = []
-    if initial_text:
-        candidates.append({"engine": "faster-whisper-base", "text": initial_text})
-        
     model_ids = []
     t_asr_start = time.time()
     
-    final_beam_size = 2
+    sys.stderr.write(f"model/beam: using small model with beam_size={final_beam_size}, target_lang={target_lang}\n")
+    sys.stderr.flush()
     
-    if escalate:
-        # Run small model for high-speed escalation
-        model_small = get_model("small")
-        target_lang = "hi" if mode != "verbatim" else None
-        final_raw_text, info_small = transcribe_with_loop_guard(
-            model_small,
-            audio,
-            language=target_lang,
-            task="transcribe",
-            beam_size=final_beam_size
-        )
+    final_raw_text, info_small = transcribe_with_loop_guard(
+        model_small,
+        audio,
+        language=target_lang,
+        task="transcribe",
+        beam_size=final_beam_size
+    )
+    
+    if info_small is not None:
         lang_guess = info_small.language
-        candidates.append({"engine": "faster-whisper-small", "text": final_raw_text})
-        model_ids = ["faster-whisper-small-int8"]
     else:
-        # Run small model for high-quality English
-        model_small = get_model("small")
-        final_raw_text, info_small = transcribe_with_loop_guard(
-            model_small,
-            audio,
-            language="en",
-            task="transcribe",
-            beam_size=final_beam_size
-        )
-        lang_guess = info_small.language
-        candidates.append({"engine": "faster-whisper-small", "text": final_raw_text})
-        model_ids = ["faster-whisper-small-int8"]
+        lang_guess = "en"
+        
+    if escalate is None:
+        # Auto mode: check if language is Hindi-like, or if there is Devanagari in the transcribed text
+        has_devanagari = bool(re.search(r"[\u0900-\u097f]", final_raw_text))
+        escalate = (lang_guess in ("hi", "ur", "ar", "mr", "ne", "sa", "sd", "pa")) or has_devanagari
+        
+    candidates.append({"engine": "faster-whisper-small", "text": final_raw_text})
+    model_ids = ["faster-whisper-small-int8"]
         
     t_asr_end = time.time()
     asr_ms = (t_asr_end - t_asr_start) * 1000
+    sys.stderr.write(f"timing: transcribe took {asr_ms:.2f}ms\n")
+    sys.stderr.flush()
     
     # 3. Finalizer
     t_post_start = time.time()
     final_text = finalize_text(final_raw_text, is_hinglish=escalate)
     t_post_end = time.time()
     post_ms = (t_post_end - t_post_start) * 1000
+    sys.stderr.write(f"timing: postprocess took {post_ms:.2f}ms\n")
+    sys.stderr.flush()
     
     total_ms = (time.time() - t0) * 1000
     timings = {
@@ -793,8 +815,6 @@ def run_pipeline(wav_path_or_audio, mode: str = "auto", force_escalate: bool | N
     
     return final_text, lang_guess, timings, candidates, model_ids
 
-# Pre-warm ALL models at module load time to avoid lazy-load latency spikes.
-# Skipped during test runs to avoid duplicate memory allocation.
+# Pre-warm models selectively depending on the entry point to avoid unnecessary loading.
 if not any(x in sys.modules for x in ("pytest", "test_stream_contract", "test_streaming_scorecard")):
-    _load_model("base")
     _load_model("small")
